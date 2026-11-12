@@ -195,10 +195,9 @@ jobs:
             fi
           done
 
-          # Fallback: Se nenhum binário com 'test' explícito foi achado, roda os binários ELF normais em modo headless
           if [ "$TEST_EXECUTED" = false ]; then
             echo "Nenhum binário de teste explícito encontrado. Executando binários disponíveis..."
-            for bin in $(find . -path "./.git" -prune -o -type f -executable ! -name "*.sh" ! -name "*.pro" ! -name "Makefile" ! -name "CMakeLists.txt" ! -name "*.sample" -print); do
+            for bin in $(find . -path "./.git" -prune -o -type f -executable ! -name "*.sh" ! -name "*.pro" ! -name "Makefile" ! -name "makefile" ! -name "CMakeLists.txt" ! -name "*.sample" -print); do
               if file "$bin" | grep -q "ELF"; then
                 echo "Executando binário ELF: $bin"
                 QT_QPA_PLATFORM=offscreen timeout 5s "$bin" || true
