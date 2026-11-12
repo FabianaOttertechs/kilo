@@ -169,7 +169,14 @@ jobs:
           # 3. Se for Makefile puro
           elif [ -f "Makefile" ] || [ -f "makefile" ]; then
             echo "-> Makefile puro detectado!"
-            make CXXFLAGS="-fprofile-arcs -ftest-coverage" LDFLAGS="-fprofile-arcs -ftest-coverage" -j$(nproc)
+            # Verifica se o Makefile usa a variável CC ou CFLAGS
+            if grep -q "CFLAGS" Makefile || grep -q "CFLAGS" makefile; then
+              echo "Aplicando flags de cobertura via CFLAGS..."
+              make CFLAGS="-fprofile-arcs -ftest-coverage -O0 -g" LDFLAGS="-fprofile-arcs -ftest-coverage" -j$(nproc)
+            else
+              echo "Makefile simples detectado. Injetando flags de cobertura direto no CC..."
+              make CC="gcc -fprofile-arcs -ftest-coverage -O0 -g" -j$(nproc)
+            fi
           else
             echo "⚠️ Nenhum sistema de build reconhecido."
           fi
