@@ -39,9 +39,12 @@ jobs:
               python3-pip \
               python3-venv \
               cppcheck \
+              qtquickcontrols2-5-dev \
+              libqt5quickcontrols2-5 \
               qtbase5-dev \
               qtdeclarative5-dev \
               libqt5websockets5-dev \
+              libqt5serialport5-dev \
               qt6-base-dev \
               qt6-declarative-dev \
               qt6-websockets-dev \
@@ -81,12 +84,13 @@ jobs:
           coverage html || true
 
           echo "=== 6. Cobertura C/C++ Nativa (Qt5 / Qt6 Universal) ==="
-          
+
           # --- 1. LIMPEZA DE CACHES ANTERIORES (Protegida) ---
           echo "Limpando caches e arquivos residuais..."
-          find . -name "Makefile" -o -name "makefile" | while read mfile; do
-            if [ -f "$mfile" ]; then
-              make -C "$(dirname "$mfile")" clean || true
+          for mf in $(find . -name "Makefile" -o -name "makefile"); do
+            if grep -q "CMAKE_COMMAND" "$mf" 2>/dev/null || grep -q "cmake_check_build_system" "$mf" 2>/dev/null; then
+              echo "-> Removendo Makefile obsoleto do CMake encontrado em: $mf"
+              rm -f "$mf"
             fi
           done
           rm -rf .qmake.stash *.o *.obj *.gcda *.gcno moc_* ui_* qrc_* build- *arm64-v8a x86_64 build *release* *debug* || true
@@ -209,13 +213,11 @@ jobs:
           fi  
           cd - > /dev/null 2>&1 || true
           
-          # --- GERAÇÃO ROBUSTA DO GCOVR ---
-          echo "Gerando relatório gcovr..."
-          mkdir -p htmlcov_cpp
+          WORKSPACE_ROOT="$PWD"
+          mkdir -p "$WORKSPACE_ROOT/htmlcov_cpp"
           
-          # Procura arquivos de cobertura gerados (.gcda / .gcno) em todo o repositório
           gcovr --root . \
-                --html-details htmlcov_cpp/index.html \
+                --html-details "$WORKSPACE_ROOT/htmlcov_cpp/index.html" \
                 --exclude-unreachable-branches \
                 --print-summary \
                 --gcov-ignore-parse-errors \
@@ -234,6 +236,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+
+          # 1. Procura automaticamente pelo index.html em qualquer subpasta do repositório
+          HTML_FILE=$(find . -name "index.html" -path "*/htmlcov_cpp/*" | head -n 1)
+
+          if [ -z "$HTML_FILE" ]; then
+            echo "⚠️ Aviso: O arquivo 'index.html' não foi encontrado em nenhuma subpasta."
+            exit 0
+          fi
+
+          # 2. Descobre qual é a pasta exata onde o relatório está guardado
+          REPORT_DIR=$(dirname "$HTML_FILE")
+          echo "Relatório localizado com sucesso em: $REPORT_DIR"
+          
           git config --global user.name "Ottertechs CI Bot"
           git config --global user.email "ci@ottertechs.local"
           
@@ -243,7 +258,7 @@ jobs:
           # Remove arquivos antigos e copia o novo relatório
           git rm -rf . || true
           mkdir -p coverage
-          cp -r htmlcov_cpp/* coverage/
+          cp -r "$REPORT_DIR"/* coverage/
           
           # Adiciona, commita e envia de volta
           git add coverage/
