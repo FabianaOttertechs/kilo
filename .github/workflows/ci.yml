@@ -85,7 +85,7 @@ jobs:
           # --- LIMPEZA DE CACHES ANTERIORES ---
           echo "Limpando caches e arquivos residuais..."
           if [ -f "Makefile" ]; then
-            make distclean || true
+            make clean || true
           fi
           rm -rf .qmake.stash Makefile *.o *.obj moc_* ui_* qrc_* arm64-v8a x86_64 build- *release* *debug* || true
           
