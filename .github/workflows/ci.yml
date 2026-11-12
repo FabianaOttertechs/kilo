@@ -2,13 +2,13 @@ name: CI Native Secure Universal
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "0812" ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - '.gitignore'
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "0812" ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -81,52 +81,53 @@ jobs:
           coverage html || true
 
           echo "=== 6. Cobertura C/C++ Nativa (Qt5 / Qt6 Universal) ==="
-
-          # --- LIMPEZA DE CACHES ANTERIORES ---
-          echo "Limpando caches e arquivos residuais..."
-          if [ -f "Makefile" ]; then
-            make clean || true
-          fi
-          rm -rf .qmake.stash Makefile *.o *.obj moc_* ui_* qrc_* arm64-v8a x86_64 build- *release* *debug* || true
           
-          # --- LIMPEZA DE CACHES ANTERIORES (Protegida contra erros) ---
+          # --- 1. LIMPEZA DE CACHES ANTERIORES (Protegida) ---
           echo "Limpando caches e arquivos residuais..."
-          if [ -f "Makefile" ] || [ -f "makefile" ]; then
-            # Adiciona || true para garantir que se o clean falhar por arquivo ausente, o CI não quebre
-            make clean || true
-          fi
-          rm -rf .qmake.stash Makefile makefile *.o *.obj *.gcda *.gcno moc_* ui_* qrc_* build- *release* *debug* kilo || true
-          
-          # Restaura o Makefile original caso ele tenha sido apagado pelo rm acima
-          git checkout Makefile || true
+          find . -name "Makefile" -o -name "makefile" | while read mfile; do
+            if [ -f "$mfile" ]; then
+              make -C "$(dirname "$mfile")" clean || true
+            fi
+          done
+          rm -rf .qmake.stash *.o *.obj *.gcda *.gcno moc_* ui_* qrc_* build- *arm64-v8a x86_64 build *release* *debug* || true
+          git checkout Makefile 2>/dev/null || true
 
           # Localiza o diretório do projeto
-          PROJ_DIR=""
+          BUILD_TYPE=""
+          PROJ_DIR="."
+
           if [ -f "CMakeLists.txt" ]; then
-            PROJ_DIR="."
-            echo "-> Projeto CMake na raiz detectado!"
+            BUILD_TYPE="cmake"
+            echo "-> Projeto CMake detectado!"
             sed -i '/QuickControls2/d' CMakeLists.txt || true
+          elif find . -maxdepth 3 -name "*.pro" | grep -q .; then
+            BUILD_TYPE="qmake"
+            echo "-> Projeto Qt (.pro) detectado!"
           elif [ -f "Makefile" ] || [ -f "makefile" ]; then
-            PROJ_DIR="."
-            echo "-> Makefile na raiz detectado!"
+            BUILD_TYPE="make"
+            echo "-> Makefile puro detectado!"
           else
+            # Procura em subpastas caso esteja isolado
             SUB_PRO=$(find . -path "./.git" -prune -o -name "*.pro" -print -o -name "CMakeLists.txt" -print -o -name "Makefile" -print | head -n 1)
             if [ -n "$SUB_PRO" ]; then
               PROJ_DIR=$(dirname "$SUB_PRO")
-              echo "-> Projeto encontrado na subpasta: $PROJ_DIR"
+              cd "$PROJ_DIR"
+              if [ -f "CMakeLists.txt" ]; then
+                BUILD_TYPE="cmake"
+              elif ls *.pro 1> /dev/null 2>&1; then
+                BUILD_TYPE="qmake"
+              elif [ -f "Makefile" ] || [ -f "makefile" ]; then
+                BUILD_TYPE="make"
+              fi
             fi
           fi
 
-          if [ -n "$PROJ_DIR" ] && [ "$PROJ_DIR" != "." ]; then
-            cd "$PROJ_DIR"
-          fi
-
           # 1. Se for CMake
-          if [ -f "CMakeLists.txt" ]; then
+          if [ "$BUILD_TYPE" = "cmake" ]; then
             mkdir -p build && cd build
             cmake -DCMAKE_BUILD_TYPE=Debug \
-                  -DCMAKE_CXX_FLAGS="-fprofile-arcs -ftest-coverage" \
-                  -DCMAKE_C_FLAGS="-fprofile-arcs -ftest-coverage" \
+                  -DCMAKE_CXX_FLAGS="-fprofile-arcs -ftest-coverage -O0 -g" \
+                  -DCMAKE_C_FLAGS="-fprofile-arcs -ftest-coverage -O0 -g" \
                   -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage" \
                   ..
             make -j$(nproc)
@@ -134,7 +135,7 @@ jobs:
             
           # 2. Se for um projeto Qt (.pro)
           elif find . -maxdepth 3 -name "*.pro" | grep -q .; then
-            PRO_FILE=$(find . -maxdepth 3 -name "*.pro" | head -n 1)
+            PRO_FILE=$(find . -maxdepth2 -name "*.pro" | head -n 1)
             PRO_DIR=$(dirname "$PRO_FILE")
             cd "$PRO_DIR"
             
