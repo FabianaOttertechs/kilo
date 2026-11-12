@@ -139,7 +139,7 @@ jobs:
             
           # 2. Se for um projeto Qt (.pro)
           elif find . -maxdepth 3 -name "*.pro" | grep -q .; then
-            PRO_FILE=$(find . -maxdepth2 -name "*.pro" | head -n 1)
+            PRO_FILE=$(find . -maxdepth 2 -name "*.pro" | head -n 1)
             PRO_DIR=$(dirname "$PRO_FILE")
             cd "$PRO_DIR"
             
