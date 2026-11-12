@@ -148,32 +148,33 @@ jobs:
             # Seleção inteligente entre Qt5 e Qt6
             QMAKE_CMD=""
             
-            # Verifica se o projeto exige explicitamente Qt6 no .pro
-            if grep -E -q "qtHaveModule\(.*6\)|QT.*=.*qt6|greaterThan\(QT_VERSION,\s*5\." "$(basename "$PRO_FILE")"; then
-              echo "-> Projeto identificado explicitamente como Qt6."
-              QMAKE_CMD="qmake6"
+            # Verifica se o qmake6 está disponível no runner e dá preferência a ele
+          if command -v qmake6 &> /dev/null; then
+            QMAKE_CMD="qmake6"
+            echo "-> Qt6 detectado. Utilizando qmake6."
+          elif grep -E -q "qtHaveModule\(.*6\)|QT.*=.*qt6|greaterThan\(QT_VERSION,\s*5\." "$(basename "$PRO_FILE")" 2>/dev/null; then
+            QMAKE_CMD="qmake6"
+            echo "-> Projeto exige Qt6 explicitamente."
+          elif command -v qmake5 &> /dev/null; then
+            QMAKE_CMD="qmake5"
+            echo "-> Utilizando qmake5."
+          else
+            QMAKE_CMD="qmake"
+            echo "-> Utilizando qmake padrão do sistema."
+          fi
+          
+          echo "Configurando via $QMAKE_CMD..."
+          
+          # Executa o qmake escolhido com as flags de cobertura
+          $QMAKE_CMD "QMAKE_CXXFLAGS+=-fprofile-arcs -ftest-coverage -O0 -g" "QMAKE_LFLAGS+=-fprofile-arcs -ftest-coverage" || {
+            echo "⚠️ Falha com $QMAKE_CMD. Tentando fallback alternativo..."
+            if [ "$QMAKE_CMD" = "qmake6" ]; then
+              qmake5 "QMAKE_CXXFLAGS+=-fprofile-arcs -ftest-coverage -O0 -g" "QMAKE_LFLAGS+=-fprofile-arcs -ftest-coverage" || qmake "..."
             else
-              # Se for Qt5, busca o qmake5 específico ou o qmake padrão do sistema
-              if command -v qmake5 &> /dev/null; then
-                QMAKE_CMD="qmake5"
-                echo "-> Utilizando qmake5 detectado no sistema."
-              else
-                QMAKE_CMD="qmake"
-                echo "-> Utilizando qmake padrão."
-              fi
+              qmake6 "QMAKE_CXXFLAGS+=-fprofile-arcs -ftest-coverage -O0 -g" "QMAKE_LFLAGS+=-fprofile-arcs -ftest-coverage"
             fi
-            
-            echo "Configurando via $QMAKE_CMD..."
-            
-            # Tenta compilar com a escolha inicial; se falhar, tenta o fallback automático
-            $QMAKE_CMD "QMAKE_CXXFLAGS+=-fprofile-arcs -ftest-coverage -O0 -g" "QMAKE_LFLAGS+=-fprofile-arcs -ftest-coverage" || {
-              if [ "$QMAKE_CMD" = "qmake6" ]; then
-                qmake "QMAKE_CXXFLAGS+=-fprofile-arcs -ftest-coverage -O0 -g" "QMAKE_LFLAGS+=-fprofile-arcs -ftest-coverage"
-              else
-                qmake6 "QMAKE_CXXFLAGS+=-fprofile-arcs -ftest-coverage -O0 -g" "QMAKE_LFLAGS+=-fprofile-arcs -ftest-coverage"
-              fi
-            }
-            make -j$(nproc)
+          }
+          make -j$(nproc)
 
           # 3. Se for Makefile puro
           elif [ -f "Makefile" ] || [ -f "makefile" ]; then
